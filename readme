@@ -1,0 +1,26 @@
+workfolio_ai_summary/
+│
+├── venv/                          # Virtual environment (auto-created)
+├── .env                           # 🔹 Secrets and config
+├── requirements.txt               # Dependencies
+├── main.py                        # Entry point (runs everything)
+├── llm_prompt.py                  # Builds and sends prompt to DeepSeek
+├── workfolio_api.py               # Fetches or loads active hours
+├── task_data.py                   # Reads manual task allocation (CSV/Text)
+├── email_utils.py                 # Sends summary email
+├── scheduler.bat                  # Optional: Windows Task Scheduler runner
+└── data/
+    ├── task_allocation.csv        # Manual/HR input (example)
+    └── workfolio_active_hours.csv # API or exported data
+
+task_allocation
+| Employee | Task Description        | Estimated Hours |
+| -------- | ----------------------- | --------------- |
+| Emp 1    | Payment Integration Fix | 3               |
+| Emp 2    | Crash Analytics Testing | 2               |
+
+workfolio_active_hours
+| Employee | App/Site Name | Status         | Activity Duration |
+| -------- | ------------- | -------------- | ----------------- |
+| Emp 1    | missioniit... | Productive     | 2h 30m            |
+| Emp 1    | Youtube       | Non-Productive | 4h 00m            |
