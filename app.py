@@ -1,7 +1,10 @@
+import os
+import json
 import streamlit as st
 import pandas as pd
 from task_data import format_task_data
 from llm_prompt import generate_summary
+from email_utils import save_summary_json, parse_summary_json, send_emails
 
 # --- Page Setup ---
 st.set_page_config(page_title="Workfolio AI Summary", layout="wide")
@@ -104,6 +107,18 @@ except Exception as e:
     st.error(f"❌ Failed to read uploaded files: {e}")
     st.stop()
 
+# --- Save uploaded files as CSV (replace existing files if present)
+os.makedirs("data", exist_ok=True)
+task_csv_path = os.path.join("data", "task_allocation.csv")
+work_csv_path = os.path.join("data", "workfolio_activity.csv")
+
+try:
+    task_df.to_csv(task_csv_path, index=False)
+    workfolio_df.to_csv(work_csv_path, index=False)
+    st.info(f"🔁 Uploaded files saved as CSV:\n`{task_csv_path}`\n`{work_csv_path}`")
+except Exception as e:
+    st.warning(f"⚠️ Could not save uploaded files to disk: {e}")
+
 # --- Control Buttons ---
 col1, col2, col3 = st.columns([1, 1, 1])
 with col1:
@@ -129,24 +144,62 @@ with tab2:
 
 with tab3:
     st.markdown("<h3>🧠 AI Summary Generator</h3>", unsafe_allow_html=True)
+    # Prepare both human-readable and raw CSV content for the prompt
     task_text = format_task_data(task_df)
     workfolio_text = workfolio_df.to_string(index=False)
+    task_csv_text = task_df.to_csv(index=False)
+    workfolio_csv_text = workfolio_df.to_csv(index=False)
 
     if run_summary:
         with st.spinner("⚙️ Generating AI summary via DeepSeek..."):
             try:
-                summary = generate_summary(task_text, workfolio_text)
+                # Pass CSV content to the summary generator so the model can compute per-employee metrics
+                summary = generate_summary(task_csv_text, workfolio_csv_text)
                 st.success("✅ AI Summary generated successfully!")
-                st.markdown("### ✨ Summary Output")
-                st.markdown(f"<div class='summary-box'>{summary}</div>", unsafe_allow_html=True)
 
-                if enable_export:
-                    st.download_button(
-                        label="💾 Download Summary (.txt)",
-                        data=summary,
-                        file_name="daily_summary.txt",
-                        mime="text/plain",
-                    )
+                # Try to parse the returned summary as JSON and save it
+                try:
+                    summary_dict = parse_summary_json(summary)
+                    save_path = save_summary_json(summary)
+                    st.markdown("### ✨ Summary Output (parsed JSON)")
+                    st.write(summary_dict.get("digest", {}))
+
+                    st.markdown("### ✉️ Generated Emails Preview")
+                    for i, em in enumerate(summary_dict.get("emails", [])):
+                        name = em.get("employee_name") or em.get("employee_id")
+                        st.markdown(f"**{i+1}. {name}**")
+                        st.text_input("Subject", value=em.get("email_subject", ""), key=f'subj_{i}')
+                        st.text_area("Body", value=em.get("email_body", ""), height=150, key=f'body_{i}')
+
+                    if enable_export:
+                        st.download_button(
+                            label="💾 Download Summary (.json)",
+                            data=json.dumps(summary_dict, indent=2),
+                            file_name="daily_summary.json",
+                            mime="application/json",
+                        )
+
+                    # Send emails if user requests and credentials are set
+                    if st.button("📨 Send Emails"):
+                        try:
+                            # Optionally provide a recipient_map if you have employee->email mapping
+                            results = send_emails(summary_dict)
+                            st.success("Email send completed")
+                            st.json(results)
+                        except Exception as e:
+                            st.error(f"Failed to send emails: {e}")
+
+                except json.JSONDecodeError:
+                    st.markdown("### ✨ Summary Output (raw)")
+                    st.markdown(f"<div class='summary-box'>{summary}</div>", unsafe_allow_html=True)
+
+                    if enable_export:
+                        st.download_button(
+                            label="💾 Download Summary (.txt)",
+                            data=summary,
+                            file_name="daily_summary.txt",
+                            mime="text/plain",
+                        )
             except Exception as e:
                 st.error(f"❌ Failed to generate summary: {e}")
     else:
