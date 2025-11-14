@@ -4,7 +4,7 @@ import streamlit as st
 import pandas as pd
 from task_data import format_task_data
 from llm_prompt import generate_summary
-from email_utils import save_summary_json, parse_summary_json, send_emails
+from email_utils import save_summary_json, parse_summary_json, send_email_smtp, send_emails
 from productivity_analyzer import load_and_merge_data, extract_employee_metrics, get_productivity_summary
 from dashboard_charts import (
     chart_employee_completion_rate,
@@ -117,7 +117,7 @@ try:
     task_df = load_uploaded_file(uploaded_task_file)
     workfolio_df = load_uploaded_file(uploaded_workfolio_file)
 except Exception as e:
-    st.error(f"❌ Failed to read uploaded files: {e}")
+    st.error(f"❌ Failed to read uploaded files: {e}")  
     st.stop()
 
 # --- Save uploaded files as CSV (for reference/processing)
@@ -168,6 +168,89 @@ with tab3:
         # Extract metrics
         metrics_df = extract_employee_metrics(task_df_data, workfolio_df_data)
         summary = get_productivity_summary(metrics_df)
+        
+        task_text = format_task_data(task_df_data)
+        workfolio_text = workfolio_df_data.to_string(index=False)
+        
+        print(task_text)
+        print(workfolio_text)
+        
+        # try:
+        #  # If ai_json is a string → parse it
+        #  if isinstance(ai_json, str):
+        #   ai_data = json.loads(ai_json)
+        #  else:
+        #   ai_data = ai_json  # already a dict
+ 
+        #   digest = ai_data["digest"]
+
+        # except Exception as e:
+        #  st.error(f"AI summary is not valid JSON: {e}")
+        # #  st.stop()
+        
+        # st.markdown("---")
+        # st.markdown("### 📧 Send Summary Emails")
+        
+        # print(digest)
+        
+
+        # if st.button("Send Summary Emails"):
+        #  try:
+        #     ai_json = generate_summary(task_text, workfolio_text)
+        #     print(ai_json)
+        #     if isinstance(ai_json, str):
+        #      dig = json.loads(ai_json)
+
+        #     digest = dig["digest"]
+        #     results = send_email_smtp(body=digest['body'], subject=digest['subject'], to_email="bhushang@yugensys.com")
+        #     st.success("Emails Sent!")
+        #     # st.json(results)
+        #  except Exception as e:
+        #     st.error(f"Email sending failed: {e}")
+        
+        if st.button("Send Summary Emails"):
+         try:
+            st.write("⏳ Generating summary... please wait.")
+
+            # Keep trying until valid JSON returned
+            while True:
+                ai_json = generate_summary(task_text, workfolio_text)
+                print("\nRAW LLM RESPONSE:\n", ai_json)
+
+                # Check if response is usable
+                if not ai_json or not isinstance(ai_json, str):
+                    st.write("⚠️ AI returned empty response, retrying...")
+                    continue
+
+                # Clean markdown wrappers
+                cleaned = (
+                    ai_json.replace("```json", "")
+                           .replace("```", "")
+                           .strip()
+                )
+
+            # Try parsing JSON
+                try:
+                 dig = json.loads(cleaned)
+                 break  # <=== VALID JSON RECEIVED → exit loop
+                except json.JSONDecodeError:
+                 st.write("⚠️ Invalid JSON returned, retrying...")
+                 continue
+
+            # Now we have valid JSON
+            digest = dig["digest"]
+
+            send_email_smtp(
+             subject=digest["subject"],
+             body=digest["body"],
+             to_email="bhushang@yugensys.com"
+            )
+
+            st.success("Emails Sent!")
+
+         except Exception as e:
+           st.error(f"Error: {e}")
+
         
         # Display summary cards
         st.markdown("### 📈 Summary Metrics")
