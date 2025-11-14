@@ -90,26 +90,19 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- Check if we have existing files ---
-os.makedirs("data", exist_ok=True)
-task_csv_path = os.path.join("data", "task_allocation.csv")
-work_csv_path = os.path.join("data", "workfolio_active_hours.csv")
-
-task_df = None
-workfolio_df = None
-use_existing_files = os.path.exists(task_csv_path) and os.path.exists(work_csv_path)
-
 # --- Upload Section ---
 st.markdown("<h3>📂 Upload Your Data Files</h3>", unsafe_allow_html=True)
-
-if use_existing_files:
-    st.info("📂 Using existing data files from disk. Upload new files to replace them.")
-
 col1, col2 = st.columns(2)
 with col1:
-    uploaded_task_file = st.file_uploader("🗂️ Task Allocation File", type=["csv", "xlsx"], key="task")
+    uploaded_task_file = st.file_uploader("🗂️ Task Allocation File (DSR_Data.xlsx)", type=["csv", "xlsx"], key="task")
 with col2:
-    uploaded_workfolio_file = st.file_uploader("💻 Workfolio Activity File", type=["csv", "xlsx"], key="workfolio")
+    uploaded_workfolio_file = st.file_uploader("💻 Workfolio Activity File (Workfolio_Data.xlsx)", type=["csv", "xlsx"], key="workfolio")
+
+
+# --- Wait for Files ---
+if uploaded_task_file is None or uploaded_workfolio_file is None:
+    st.info("📁 Please upload both **Task Allocation (DSR_Data.xlsx)** and **Workfolio Activity (Workfolio_Data.xlsx)** files.")
+    st.stop()
 
 # --- Load Data (CSV or Excel) ---
 def load_uploaded_file(file):
@@ -120,54 +113,24 @@ def load_uploaded_file(file):
     else:
         raise ValueError("Unsupported file format. Please upload a CSV or Excel file.")
 
-# If files were uploaded, load and save them
-if uploaded_task_file is not None and uploaded_workfolio_file is not None:
-    try:
-        task_df = load_uploaded_file(uploaded_task_file)
-        workfolio_df = load_uploaded_file(uploaded_workfolio_file)
-        
-        # Save uploaded files as CSV
-        task_df.to_csv(task_csv_path, index=False)
-        
-        # Only save workfolio file if it has the correct columns (Activity Duration or Status)
-        has_activity_duration = any("duration" in c.lower() for c in workfolio_df.columns)
-        has_status = any("status" in c.lower() for c in workfolio_df.columns)
-        
-        if has_activity_duration and has_status:
-            # This looks like the correct workfolio file
-            workfolio_df.to_csv(work_csv_path, index=False)
-            st.info(f"🔁 Uploaded files saved as CSV:\n`{task_csv_path}`\n`{work_csv_path}`")
-        else:
-            # Workfolio file doesn't have expected columns - keep existing file if it exists
-            if os.path.exists(work_csv_path):
-                st.warning(f"⚠️ Workfolio file doesn't have expected columns. Using previously saved workfolio data.")
-            else:
-                # Create a minimal workfolio file with dummy data
-                st.warning(f"⚠️ Workfolio file missing expected columns. Using sample data for dashboard.")
-                sample_workfolio = pd.DataFrame({
-                    "Employee": [f"Emp {i}" for i in range(1, 7)],
-                    "App/Site Name": ["Sample App"] * 6,
-                    "Status": ["Productive"] * 6,
-                    "Activity Duration": ["1h 00m"] * 6
-                })
-                sample_workfolio.to_csv(work_csv_path, index=False)
-    except Exception as e:
-        st.error(f"❌ Failed to read uploaded files: {e}")
-        st.stop()
+try:
+    task_df = load_uploaded_file(uploaded_task_file)
+    workfolio_df = load_uploaded_file(uploaded_workfolio_file)
+except Exception as e:
+    st.error(f"❌ Failed to read uploaded files: {e}")
+    st.stop()
 
-# If no files uploaded, try to load existing files
-if task_df is None or workfolio_df is None:
-    if use_existing_files:
-        try:
-            task_df = pd.read_csv(task_csv_path)
-            workfolio_df = pd.read_csv(work_csv_path)
-            st.success(f"✓ Loaded existing data files from disk")
-        except Exception as e:
-            st.error(f"❌ Failed to load existing files: {e}")
-            st.stop()
-    else:
-        st.info("📁 Please upload both **Task Allocation** and **Workfolio Activity** files (CSV or Excel).")
-        st.stop()
+# --- Save uploaded files as CSV (for reference/processing)
+os.makedirs("data", exist_ok=True)
+task_csv_path = os.path.join("data", "task_allocation.csv")
+work_csv_path = os.path.join("data", "workfolio_active_hours.csv")
+
+try:
+    task_df.to_csv(task_csv_path, index=False)
+    workfolio_df.to_csv(work_csv_path, index=False)
+    st.success(f"✓ Files processed successfully!")
+except Exception as e:
+    st.warning(f"⚠️ Could not save processed files: {e}")
 
 # --- Control Buttons ---
 col1, col2, col3 = st.columns([1, 1, 1])
