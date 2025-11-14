@@ -101,8 +101,17 @@ with col2:
 
 # --- Wait for Files ---
 if uploaded_task_file is None or uploaded_workfolio_file is None:
-    st.info("📁 Please upload both **Task Allocation (DSR_Data.xlsx)** and **Workfolio Activity (Workfolio_Data.xlsx)** files.")
-    st.stop()
+   st.markdown(
+        """
+        <div style="background-color:#555555; padding:12px; border-radius:6px;">
+            <span style="color:white; font-size:16px;">
+                📁 Please upload both <b>Task Allocation (DSR_Data.xlsx)</b> and <b>Workfolio Activity (Workfolio_Data.xlsx)</b> files.
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )  
+st.stop()
 
 # --- Load Data (CSV or Excel) ---
 def load_uploaded_file(file):
