@@ -101,7 +101,7 @@ with col2:
 
 # --- Wait for Files ---
 if uploaded_task_file is None or uploaded_workfolio_file is None:
-   st.markdown(
+    st.markdown(
         """
         <div style="background-color:#555555; padding:12px; border-radius:6px;">
             <span style="color:white; font-size:16px;">
@@ -110,8 +110,8 @@ if uploaded_task_file is None or uploaded_workfolio_file is None:
         </div>
         """,
         unsafe_allow_html=True
-    )  
-st.stop()
+    )
+    st.stop()
 
 # --- Load Data (CSV or Excel) ---
 def load_uploaded_file(file):
@@ -122,24 +122,42 @@ def load_uploaded_file(file):
     else:
         raise ValueError("Unsupported file format. Please upload a CSV or Excel file.")
 
-try:
-    task_df = load_uploaded_file(uploaded_task_file)
-    workfolio_df = load_uploaded_file(uploaded_workfolio_file)
-except Exception as e:
-    st.error(f"❌ Failed to read uploaded files: {e}")
-    st.stop()
+# --- Convert and Save to CSV with Progress UI ---
+task_df = None
+workfolio_df = None
 
-# --- Save uploaded files as CSV (for reference/processing)
+with st.spinner("🔄 Processing files... Converting Excel to CSV..."):
+    try:
+        # Load files from upload
+        task_df = load_uploaded_file(uploaded_task_file)
+        workfolio_df = load_uploaded_file(uploaded_workfolio_file)
+    except Exception as e:
+        st.error(f"❌ Failed to read uploaded files: {e}")
+        st.stop()
+
+# --- Save uploaded files as CSV (blocking operation with confirmation) ---
 os.makedirs("data", exist_ok=True)
 task_csv_path = os.path.join("data", "task_allocation.csv")
 work_csv_path = os.path.join("data", "workfolio_active_hours.csv")
 
-try:
-    task_df.to_csv(task_csv_path, index=False)
-    workfolio_df.to_csv(work_csv_path, index=False)
-    st.success(f"✓ Files processed successfully!")
-except Exception as e:
-    st.warning(f"⚠️ Could not save processed files: {e}")
+with st.spinner("💾 Saving files as CSV..."):
+    try:
+        # Save task file
+        task_df.to_csv(task_csv_path, index=False)
+        
+        # Save workfolio file
+        workfolio_df.to_csv(work_csv_path, index=False)
+        
+        # Verify files exist
+        if os.path.exists(task_csv_path) and os.path.exists(work_csv_path):
+            st.success(f"✅ Files converted and saved successfully!")
+        else:
+            st.error("❌ CSV files were not saved properly. Check write permissions.")
+            st.stop()
+            
+    except Exception as e:
+        st.error(f"❌ Failed to convert and save files: {e}")
+        st.stop()
 
 # --- Control Buttons (hidden by request) ---
 # The UI buttons were removed per user request. Define the
