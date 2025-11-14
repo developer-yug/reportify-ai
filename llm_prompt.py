@@ -15,18 +15,27 @@ def generate_summary(task_data, workfolio_data):
     if not API_KEY:
         raise ValueError("❌ DEEPSEEK_API_KEY not found. Please set it in .env or Streamlit secrets.")
 
+    # Instruct the model to return a machine-readable JSON payload.
+    # The JSON must include per-employee email subjects and bodies and an overall digest.
     prompt = f"""
-    You are a smart productivity analyst.
-    Based on the data below, summarize how much time each employee spent on assigned tasks
-    and provide an overall productivity summary.
+    You are a productivity analyst that returns output strictly as JSON.
+    You will receive two CSV inputs: Task Allocation and Workfolio Activity.
 
-    === Task Allocation ===
+    Requirements for the JSON output:
+    - Top-level keys: `emails` (list), `digest` (object).
+    - Each item in `emails` must be an object with: `employee_id`, `employee_name` (if available), `email_subject`, `email_body`.
+    - `digest` must contain `subject` and `body` for a company-wide summary email.
+    - All times should be reported in hours (round to 1 decimal place) and include: total assigned tasks, tasks completed, total estimated time, total active time, and percentage completion.
+    - Keep `email_subject` short (<= 80 chars). Make `email_body` friendly, actionable, and include 2-3 bullet highlights and a short suggestion to improve productivity.
+    - Return only valid JSON (no extra prose or commentary).
+
+    === Task Allocation CSV ===
     {task_data}
 
-    === Workfolio Activity Summary ===
+    === Workfolio Activity CSV ===
     {workfolio_data}
 
-    Provide a concise, insightful report.
+    Produce the JSON now.
     """
 
     url = "https://api.deepseek.com/v1/chat/completions"

@@ -5,6 +5,18 @@ import pandas as pd
 from task_data import format_task_data
 from llm_prompt import generate_summary
 from email_utils import save_summary_json, parse_summary_json, send_emails
+from productivity_analyzer import load_and_merge_data, extract_employee_metrics, get_productivity_summary
+from dashboard_charts import (
+    chart_employee_completion_rate,
+    chart_tasks_completed,
+    chart_total_hours_worked,
+    chart_productivity_ratio,
+    chart_productive_vs_nonproductive,
+    chart_avg_time_per_task,
+    chart_productivity_scatter,
+    chart_completion_rate_distribution,
+    create_summary_cards,
+)
 
 # --- Page Setup ---
 st.set_page_config(page_title="Workfolio AI Summary", layout="wide")
@@ -78,18 +90,26 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
+# --- Check if we have existing files ---
+os.makedirs("data", exist_ok=True)
+task_csv_path = os.path.join("data", "task_allocation.csv")
+work_csv_path = os.path.join("data", "workfolio_active_hours.csv")
+
+task_df = None
+workfolio_df = None
+use_existing_files = os.path.exists(task_csv_path) and os.path.exists(work_csv_path)
+
 # --- Upload Section ---
 st.markdown("<h3>📂 Upload Your Data Files</h3>", unsafe_allow_html=True)
+
+if use_existing_files:
+    st.info("📂 Using existing data files from disk. Upload new files to replace them.")
+
 col1, col2 = st.columns(2)
 with col1:
     uploaded_task_file = st.file_uploader("🗂️ Task Allocation File", type=["csv", "xlsx"], key="task")
 with col2:
     uploaded_workfolio_file = st.file_uploader("💻 Workfolio Activity File", type=["csv", "xlsx"], key="workfolio")
-
-# --- Wait for Files ---
-if uploaded_task_file is None or uploaded_workfolio_file is None:
-    st.info("📁 Please upload both **Task Allocation** and **Workfolio Activity** files (CSV or Excel).")
-    st.stop()
 
 # --- Load Data (CSV or Excel) ---
 def load_uploaded_file(file):
@@ -100,24 +120,54 @@ def load_uploaded_file(file):
     else:
         raise ValueError("Unsupported file format. Please upload a CSV or Excel file.")
 
-try:
-    task_df = load_uploaded_file(uploaded_task_file)
-    workfolio_df = load_uploaded_file(uploaded_workfolio_file)
-except Exception as e:
-    st.error(f"❌ Failed to read uploaded files: {e}")
-    st.stop()
+# If files were uploaded, load and save them
+if uploaded_task_file is not None and uploaded_workfolio_file is not None:
+    try:
+        task_df = load_uploaded_file(uploaded_task_file)
+        workfolio_df = load_uploaded_file(uploaded_workfolio_file)
+        
+        # Save uploaded files as CSV
+        task_df.to_csv(task_csv_path, index=False)
+        
+        # Only save workfolio file if it has the correct columns (Activity Duration or Status)
+        has_activity_duration = any("duration" in c.lower() for c in workfolio_df.columns)
+        has_status = any("status" in c.lower() for c in workfolio_df.columns)
+        
+        if has_activity_duration and has_status:
+            # This looks like the correct workfolio file
+            workfolio_df.to_csv(work_csv_path, index=False)
+            st.info(f"🔁 Uploaded files saved as CSV:\n`{task_csv_path}`\n`{work_csv_path}`")
+        else:
+            # Workfolio file doesn't have expected columns - keep existing file if it exists
+            if os.path.exists(work_csv_path):
+                st.warning(f"⚠️ Workfolio file doesn't have expected columns. Using previously saved workfolio data.")
+            else:
+                # Create a minimal workfolio file with dummy data
+                st.warning(f"⚠️ Workfolio file missing expected columns. Using sample data for dashboard.")
+                sample_workfolio = pd.DataFrame({
+                    "Employee": [f"Emp {i}" for i in range(1, 7)],
+                    "App/Site Name": ["Sample App"] * 6,
+                    "Status": ["Productive"] * 6,
+                    "Activity Duration": ["1h 00m"] * 6
+                })
+                sample_workfolio.to_csv(work_csv_path, index=False)
+    except Exception as e:
+        st.error(f"❌ Failed to read uploaded files: {e}")
+        st.stop()
 
-# --- Save uploaded files as CSV (replace existing files if present)
-os.makedirs("data", exist_ok=True)
-task_csv_path = os.path.join("data", "task_allocation.csv")
-work_csv_path = os.path.join("data", "workfolio_activity.csv")
-
-try:
-    task_df.to_csv(task_csv_path, index=False)
-    workfolio_df.to_csv(work_csv_path, index=False)
-    st.info(f"🔁 Uploaded files saved as CSV:\n`{task_csv_path}`\n`{work_csv_path}`")
-except Exception as e:
-    st.warning(f"⚠️ Could not save uploaded files to disk: {e}")
+# If no files uploaded, try to load existing files
+if task_df is None or workfolio_df is None:
+    if use_existing_files:
+        try:
+            task_df = pd.read_csv(task_csv_path)
+            workfolio_df = pd.read_csv(work_csv_path)
+            st.success(f"✓ Loaded existing data files from disk")
+        except Exception as e:
+            st.error(f"❌ Failed to load existing files: {e}")
+            st.stop()
+    else:
+        st.info("📁 Please upload both **Task Allocation** and **Workfolio Activity** files (CSV or Excel).")
+        st.stop()
 
 # --- Control Buttons ---
 col1, col2, col3 = st.columns([1, 1, 1])
@@ -132,7 +182,7 @@ if reload_data:
     st.experimental_rerun()
 
 # --- Tabs ---
-tab1, tab2, tab3 = st.tabs(["📋 Task Allocation", "💻 Workfolio Activity", "🧠 AI Summary"])
+tab1, tab2, tab3, tab4 = st.tabs(["📋 Task Allocation", "💻 Workfolio Activity", "🧠 AI Summary", "📊 Admin Dashboard"])
 
 with tab1:
     st.markdown("<h3>📋 Task Allocation Data</h3>", unsafe_allow_html=True)
@@ -204,3 +254,130 @@ with tab3:
                 st.error(f"❌ Failed to generate summary: {e}")
     else:
         st.info("Press **Generate AI Summary** to run the model.")
+
+with tab4:
+    st.markdown("<h3>📊 Admin Productivity Dashboard</h3>", unsafe_allow_html=True)
+    st.markdown("**Real-time analytics and employee productivity insights**")
+
+    # Load and process productivity data
+    try:
+        task_csv_path = os.path.join("data", "task_allocation.csv")
+        work_csv_path = os.path.join("data", "workfolio_active_hours.csv")
+        
+        # Load and merge data
+        task_df_data, workfolio_df_data = load_and_merge_data(task_csv_path, work_csv_path)
+        
+        # Extract metrics
+        metrics_df = extract_employee_metrics(task_df_data, workfolio_df_data)
+        summary = get_productivity_summary(metrics_df)
+        
+        # Display summary cards
+        st.markdown("### 📈 Summary Metrics")
+        summary_cards = create_summary_cards(summary)
+        
+        col_summary = st.columns(len(summary_cards))
+        for idx, (key, value) in enumerate(summary_cards.items()):
+            with col_summary[idx]:
+                st.metric(label=key, value=value)
+        
+        # Dashboard controls
+        st.markdown("---")
+        st.markdown("### 🎯 Analytics & Visualizations")
+        
+        show_completion = st.checkbox("Show Completion Metrics", value=True)
+        show_hours = st.checkbox("Show Hours Metrics", value=True)
+        show_activity = st.checkbox("Show Activity Metrics", value=True)
+        show_individual = st.checkbox("Show Individual Employee Analysis", value=True)
+        
+        # Row 1: Completion metrics
+        if show_completion:
+            st.markdown("#### Task Completion Analysis")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig1 = chart_employee_completion_rate(metrics_df)
+                st.plotly_chart(fig1, use_container_width=True)
+            
+            with col2:
+                fig2 = chart_tasks_completed(metrics_df)
+                st.plotly_chart(fig2, use_container_width=True)
+            
+            col3, col4 = st.columns(2)
+            with col3:
+                fig3 = chart_completion_rate_distribution(metrics_df)
+                st.plotly_chart(fig3, use_container_width=True)
+            
+            with col4:
+                fig4 = chart_avg_time_per_task(metrics_df)
+                st.plotly_chart(fig4, use_container_width=True)
+        
+        # Row 2: Hours and efficiency
+        if show_hours:
+            st.markdown("#### Time & Efficiency Analysis")
+            col5, col6 = st.columns(2)
+            
+            with col5:
+                fig5 = chart_total_hours_worked(metrics_df)
+                st.plotly_chart(fig5, use_container_width=True)
+            
+            with col6:
+                fig6 = chart_productivity_scatter(metrics_df)
+                st.plotly_chart(fig6, use_container_width=True)
+        
+        # Row 3: Activity metrics
+        if show_activity:
+            st.markdown("#### Activity & Productivity Analysis")
+            col7, col8 = st.columns(2)
+            
+            with col7:
+                fig7 = chart_productivity_ratio(metrics_df)
+                if fig7:
+                    st.plotly_chart(fig7, use_container_width=True)
+                else:
+                    st.info("No workfolio activity data available for some employees.")
+            
+            with col8:
+                fig8 = chart_productive_vs_nonproductive(metrics_df)
+                if fig8:
+                    st.plotly_chart(fig8, use_container_width=True)
+                else:
+                    st.info("No workfolio activity data available.")
+        
+        # Individual employee analysis
+        if show_individual:
+            st.markdown("#### 👥 Individual Employee Insights")
+            
+            employees = sorted(metrics_df["employee_name"].unique())
+            selected_emp = st.selectbox("Select Employee", employees, key="emp_select")
+            
+            if selected_emp:
+                emp_data = metrics_df[metrics_df["employee_name"] == selected_emp].iloc[0]
+                
+                st.markdown(f"**Employee: {selected_emp}**")
+                
+                col_emp1, col_emp2, col_emp3, col_emp4 = st.columns(4)
+                with col_emp1:
+                    st.metric(label="Tasks Completed", value=int(emp_data["completed_tasks"]), 
+                             delta=f"of {int(emp_data['total_tasks'])}")
+                
+                with col_emp2:
+                    st.metric(label="Completion Rate", value=f"{emp_data['completion_rate']:.1f}%")
+                
+                with col_emp3:
+                    st.metric(label="Total Hours", value=f"{emp_data['total_time_taken_hours']:.2f}h")
+                
+                with col_emp4:
+                    prod_ratio = emp_data["productivity_ratio"] if emp_data["total_activity_hours"] > 0 else 0
+                    st.metric(label="Productivity Ratio", value=f"{prod_ratio:.1f}%")
+                
+                # Detailed breakdown
+                st.markdown("**Task Details:**")
+                emp_tasks = task_df_data[task_df_data["Employee Id"] == emp_data["employee_id"]].copy()
+                if len(emp_tasks) > 0:
+                    st.dataframe(emp_tasks[[c for c in emp_tasks.columns if c not in ["Employee Id"]]], 
+                                use_container_width=True, hide_index=True)
+    
+    except Exception as e:
+        st.error(f"❌ Failed to load dashboard: {e}")
+        import traceback
+        st.info(traceback.format_exc())

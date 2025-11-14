@@ -1,0 +1,7 @@
+employee_id,employee_name,total_time_taken_hours,avg_time_per_task,total_tasks,completed_tasks,overdue_tasks,completion_rate,total_activity_hours,productive_hours,nonproductive_hours,productivity_ratio
+104,Abdul Karim,5.25,2.63,2,2,0,100.0,0.0,0.0,0.0,0.0
+101,Tanmay Chaudhari,5.93,2.96,2,1,1,50.0,6.5,2.0,4.5,30.77
+102,Dixhansh Mamgain,6.26,3.13,2,1,1,50.0,1.75,1.0,0.75,57.14
+103,Bhushan Gayakwad,7.77,3.89,2,1,1,50.0,3.25,1.0,2.25,30.77
+105,Vaibhav Korade,6.19,3.09,2,1,1,50.0,0.0,0.0,0.0,0.0
+106,Neha Sirsat,6.26,3.13,2,1,1,50.0,0.0,0.0,0.0,0.0

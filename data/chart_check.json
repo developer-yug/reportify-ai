@@ -1,0 +1,26 @@
+{
+  "Tasks by Employee": {
+    "present": true,
+    "title": "📋 Tasks Assigned per Employee"
+  },
+  "Completion Rate": {
+    "present": true,
+    "title": "✅ Task Completion Status"
+  },
+  "Estimated vs Active": {
+    "present": false,
+    "title": null
+  },
+  "Employee Productivity": {
+    "present": true,
+    "title": "🎯 Employee Completion Rate"
+  },
+  "Workload Distribution": {
+    "present": true,
+    "title": "🔄 Workload Distribution Across Team"
+  },
+  "Task Distribution Heatmap": {
+    "present": true,
+    "title": "📊 Task-Employee Distribution Heatmap"
+  }
+}
